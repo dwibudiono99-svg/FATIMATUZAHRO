@@ -1,0 +1,523 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default-Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Global Hardened Helpers
+    // -------------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerified() && request.auth.token.email == 'muhammadfadloli80@admin.sma.belajar.id';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (isVerified() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isWorkspaceOwner(workspaceId) {
+      return isVerified() && (request.auth.uid == workspaceId || isAdmin());
+    }
+
+    function hasWorkspaceParent(workspaceId) {
+      return exists(/databases/$(database)/documents/workspaces/$(workspaceId)) ||
+        existsAfter(/databases/$(database)/documents/workspaces/$(workspaceId));
+    }
+
+    function isBoundedString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidCustomValues(data) {
+      return !('customValues' in data) || (data.customValues is map && data.customValues.size() <= 25);
+    }
+
+    function isValidStringList(val, maxItems) {
+      return val is list && val.size() <= maxItems && (val.size() == 0 || val[0] is string);
+    }
+
+    // -------------------------------------------------------------------------
+    // Entity Validation Blueprints
+    // -------------------------------------------------------------------------
+    function isValidWorkspace(data) {
+      return data.keys().hasAll(['ownerId', 'name', 'seeded', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'name', 'seeded', 'createdAt', 'updatedAt'])
+        && isValidId(data.ownerId)
+        && isBoundedString(data.name, 1, 160)
+        && data.seeded is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidKopSuratMap(kop) {
+      return kop is map
+        && kop.keys().hasAll([
+          'instansiInduk', 'namaSekolah', 'subJudul', 'alamat', 'kontak',
+          'kotaPenetapan', 'namaKepala', 'nipKepala', 'jabatanKepala',
+          'namaKaTU', 'nipKaTU', 'logoUrl', 'ukuranLogo', 'gayaGaris',
+          'warnaAksen', 'posisiTeks'
+        ])
+        && kop.keys().hasOnly([
+          'instansiInduk', 'namaSekolah', 'subJudul', 'alamat', 'kontak',
+          'kotaPenetapan', 'namaKepala', 'nipKepala', 'jabatanKepala',
+          'namaKaTU', 'nipKaTU', 'logoUrl', 'ukuranLogo', 'gayaGaris',
+          'warnaAksen', 'posisiTeks'
+        ])
+        && isBoundedString(kop.instansiInduk, 0, 200)
+        && isBoundedString(kop.namaSekolah, 1, 200)
+        && isBoundedString(kop.subJudul, 0, 240)
+        && isBoundedString(kop.alamat, 0, 300)
+        && isBoundedString(kop.kontak, 0, 240)
+        && isBoundedString(kop.kotaPenetapan, 0, 100)
+        && isBoundedString(kop.namaKepala, 0, 140)
+        && isBoundedString(kop.nipKepala, 0, 60)
+        && isBoundedString(kop.jabatanKepala, 0, 120)
+        && isBoundedString(kop.namaKaTU, 0, 140)
+        && isBoundedString(kop.nipKaTU, 0, 60)
+        && isBoundedString(kop.logoUrl, 0, 250000)
+        && kop.ukuranLogo in ['sm', 'md', 'lg']
+        && kop.gayaGaris in ['double', 'thick-thin', 'solid']
+        && isBoundedString(kop.warnaAksen, 4, 20)
+        && kop.posisiTeks in ['center', 'left'];
+    }
+
+    function isValidDashboardConfigMap(dash) {
+      return dash is map
+        && dash.keys().hasAll([
+          'judul', 'subjudul', 'tahunAjaran', 'kepadatanTabel',
+          'warnaTema', 'widgetTampil', 'urutanModul'
+        ])
+        && dash.keys().hasOnly([
+          'judul', 'subjudul', 'tahunAjaran', 'kepadatanTabel',
+          'warnaTema', 'widgetTampil', 'urutanModul'
+        ])
+        && isBoundedString(dash.judul, 1, 160)
+        && isBoundedString(dash.subjudul, 0, 240)
+        && isBoundedString(dash.tahunAjaran, 1, 60)
+        && dash.kepadatanTabel in ['nyaman', 'padat']
+        && dash.warnaTema in ['slate', 'navy', 'emerald', 'amber']
+        && isValidStringList(dash.widgetTampil, 12)
+        && isValidStringList(dash.urutanModul, 12);
+    }
+
+    function isValidWorkspaceConfig(data) {
+      return data.keys().hasAll(['ownerId', 'kopSurat', 'dashboardConfig', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'kopSurat', 'dashboardConfig', 'createdAt', 'updatedAt'])
+        && isValidId(data.ownerId)
+        && isValidKopSuratMap(data.kopSurat)
+        && isValidDashboardConfigMap(data.dashboardConfig)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidModuleConfig(data) {
+      return data.keys().hasAll([
+          'ownerId', 'moduleId', 'displayName', 'hiddenColumns',
+          'columnLabels', 'selectOptions', 'customFields', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'moduleId', 'displayName', 'hiddenColumns',
+          'columnLabels', 'selectOptions', 'customFields', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && data.moduleId in ['persuratan', 'aset', 'guru', 'siswa', 'karyawan']
+        && isBoundedString(data.displayName, 1, 80)
+        && isValidStringList(data.hiddenColumns, 30)
+        && data.columnLabels is map && data.columnLabels.size() <= 30
+        && data.selectOptions is map && data.selectOptions.size() <= 15
+        && data.customFields is list && data.customFields.size() <= 20
+        && (data.customFields.size() == 0 || data.customFields[0] is map)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLetter(data) {
+      return data.keys().hasAll([
+          'ownerId', 'nomorSurat', 'jenis', 'kategori', 'tanggalSurat',
+          'pihakTerkait', 'perihal', 'sifat', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'nomorSurat', 'jenis', 'kategori', 'tanggalSurat',
+          'tanggalAgenda', 'pihakTerkait', 'perihal', 'sifat', 'status',
+          'isiRingkas', 'penandatangan', 'disposisi', 'customValues',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && isBoundedString(data.nomorSurat, 1, 100)
+        && data.jenis in ['Surat Masuk', 'Surat Keluar']
+        && isBoundedString(data.kategori, 1, 60)
+        && isBoundedString(data.tanggalSurat, 1, 20)
+        && (!('tanggalAgenda' in data) || isBoundedString(data.tanggalAgenda, 0, 20))
+        && isBoundedString(data.pihakTerkait, 1, 160)
+        && isBoundedString(data.perihal, 1, 240)
+        && data.sifat in ['Biasa', 'Penting', 'Segera', 'Rahasia']
+        && data.status in ['Draft', 'Diproses', 'Terkirim', 'Diterima', 'Diarsipkan']
+        && (!('isiRingkas' in data) || isBoundedString(data.isiRingkas, 0, 5000))
+        && (!('penandatangan' in data) || isBoundedString(data.penandatangan, 0, 120))
+        && (!('disposisi' in data) || isBoundedString(data.disposisi, 0, 300))
+        && isValidCustomValues(data)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAsset(data) {
+      return data.keys().hasAll([
+          'ownerId', 'kodeAset', 'namaAset', 'kategori', 'lokasi',
+          'jumlah', 'satuan', 'kondisi', 'nilaiPerolehan', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'kodeAset', 'namaAset', 'kategori', 'lokasi',
+          'jumlah', 'satuan', 'kondisi', 'tahunPerolehan', 'sumberDana',
+          'nilaiPerolehan', 'penanggungJawab', 'keterangan', 'customValues',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && isBoundedString(data.kodeAset, 1, 60)
+        && isBoundedString(data.namaAset, 1, 160)
+        && isBoundedString(data.kategori, 1, 80)
+        && isBoundedString(data.lokasi, 1, 120)
+        && data.jumlah is number && data.jumlah >= 0 && data.jumlah <= 1000000
+        && isBoundedString(data.satuan, 1, 40)
+        && data.kondisi in ['Baik', 'Rusak Ringan', 'Rusak Berat']
+        && (!('tahunPerolehan' in data) || isBoundedString(data.tahunPerolehan, 0, 10))
+        && (!('sumberDana' in data) || isBoundedString(data.sumberDana, 0, 80))
+        && data.nilaiPerolehan is number && data.nilaiPerolehan >= 0 && data.nilaiPerolehan <= 1000000000000
+        && (!('penanggungJawab' in data) || isBoundedString(data.penanggungJawab, 0, 120))
+        && (!('keterangan' in data) || isBoundedString(data.keterangan, 0, 500))
+        && isValidCustomValues(data)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTeacher(data) {
+      return data.keys().hasAll([
+          'ownerId', 'nip', 'nama', 'jenisKelamin', 'mataPelajaran',
+          'statusKepegawaian', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'nip', 'nuptk', 'nama', 'jenisKelamin', 'mataPelajaran',
+          'statusKepegawaian', 'jabatanTambahan', 'pendidikan', 'telepon',
+          'email', 'alamat', 'status', 'customValues', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && isBoundedString(data.nip, 1, 40)
+        && (!('nuptk' in data) || isBoundedString(data.nuptk, 0, 40))
+        && isBoundedString(data.nama, 1, 140)
+        && data.jenisKelamin in ['L', 'P']
+        && isBoundedString(data.mataPelajaran, 1, 100)
+        && isBoundedString(data.statusKepegawaian, 1, 40)
+        && (!('jabatanTambahan' in data) || isBoundedString(data.jabatanTambahan, 0, 100))
+        && (!('pendidikan' in data) || isBoundedString(data.pendidikan, 0, 60))
+        && (!('telepon' in data) || isBoundedString(data.telepon, 0, 30))
+        && (!('email' in data) || isBoundedString(data.email, 0, 120))
+        && (!('alamat' in data) || isBoundedString(data.alamat, 0, 300))
+        && data.status in ['Aktif', 'Cuti', 'Mutasi', 'Pensiun']
+        && isValidCustomValues(data)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidStudent(data) {
+      return data.keys().hasAll([
+          'ownerId', 'nisn', 'nama', 'jenisKelamin', 'kelas',
+          'angkatan', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'nisn', 'nis', 'nama', 'jenisKelamin', 'kelas',
+          'angkatan', 'ttl', 'namaWali', 'teleponWali', 'alamat',
+          'status', 'customValues', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && isBoundedString(data.nisn, 1, 30)
+        && (!('nis' in data) || isBoundedString(data.nis, 0, 30))
+        && isBoundedString(data.nama, 1, 140)
+        && data.jenisKelamin in ['L', 'P']
+        && isBoundedString(data.kelas, 1, 40)
+        && isBoundedString(data.angkatan, 1, 20)
+        && (!('ttl' in data) || isBoundedString(data.ttl, 0, 100))
+        && (!('namaWali' in data) || isBoundedString(data.namaWali, 0, 140))
+        && (!('teleponWali' in data) || isBoundedString(data.teleponWali, 0, 30))
+        && (!('alamat' in data) || isBoundedString(data.alamat, 0, 300))
+        && data.status in ['Aktif', 'Lulus', 'Pindah', 'Non-Aktif']
+        && isValidCustomValues(data)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidEmployee(data) {
+      return data.keys().hasAll([
+          'ownerId', 'kodePegawai', 'nama', 'jenisKelamin', 'divisi',
+          'jabatan', 'statusKepegawaian', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'kodePegawai', 'nama', 'jenisKelamin', 'divisi',
+          'jabatan', 'statusKepegawaian', 'telepon', 'tanggalMasuk',
+          'alamat', 'status', 'customValues', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && isBoundedString(data.kodePegawai, 1, 40)
+        && isBoundedString(data.nama, 1, 140)
+        && data.jenisKelamin in ['L', 'P']
+        && isBoundedString(data.divisi, 1, 80)
+        && isBoundedString(data.jabatan, 1, 100)
+        && isBoundedString(data.statusKepegawaian, 1, 40)
+        && (!('telepon' in data) || isBoundedString(data.telepon, 0, 30))
+        && (!('tanggalMasuk' in data) || isBoundedString(data.tanggalMasuk, 0, 20))
+        && (!('alamat' in data) || isBoundedString(data.alamat, 0, 300))
+        && data.status in ['Aktif', 'Cuti', 'Resign']
+        && isValidCustomValues(data)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection Match Blocks
+    // -------------------------------------------------------------------------
+    match /admins/{adminId} {
+      allow get: if isVerified() && isValidId(adminId) && (request.auth.uid == adminId || isAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create, update, delete: if isBootstrappedAdmin() && isValidId(adminId);
+    }
+
+    match /workspaces/{workspaceId} {
+      allow get: if isValidId(workspaceId) && isWorkspaceOwner(workspaceId);
+      allow list: if isVerified() && (workspaceId == request.auth.uid || existing().ownerId == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isVerified() && isValidId(workspaceId)
+        && isValidWorkspace(incoming())
+        && (incoming().ownerId == request.auth.uid || isAdmin())
+        && incoming().ownerId == workspaceId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified() && isValidId(workspaceId)
+        && isValidWorkspace(incoming())
+        && isWorkspaceOwner(workspaceId)
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'seeded', 'updatedAt'])
+          || isAdmin()
+        );
+      allow delete: if isValidId(workspaceId) && isWorkspaceOwner(workspaceId);
+
+      match /config/{configId} {
+        allow get: if isValidId(workspaceId) && isValidId(configId) && isWorkspaceOwner(workspaceId);
+        allow list: if isVerified() && (workspaceId == request.auth.uid || existing().ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isVerified() && isValidId(workspaceId) && configId == 'main'
+          && isValidWorkspaceConfig(incoming())
+          && isWorkspaceOwner(workspaceId)
+          && incoming().ownerId == workspaceId
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasWorkspaceParent(workspaceId);
+        allow update: if isVerified() && isValidId(workspaceId) && configId == 'main'
+          && isValidWorkspaceConfig(incoming())
+          && isWorkspaceOwner(workspaceId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['kopSurat', 'updatedAt'])
+            || incoming().diff(existing()).affectedKeys().hasOnly(['dashboardConfig', 'updatedAt'])
+            || incoming().diff(existing()).affectedKeys().hasOnly(['kopSurat', 'dashboardConfig', 'updatedAt'])
+            || isAdmin()
+          );
+        allow delete: if isValidId(workspaceId) && isValidId(configId) && isWorkspaceOwner(workspaceId);
+      }
+
+      match /moduleConfigs/{moduleId} {
+        allow get: if isValidId(workspaceId) && isValidId(moduleId) && isWorkspaceOwner(workspaceId);
+        allow list: if isVerified() && (workspaceId == request.auth.uid || existing().ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isVerified() && isValidId(workspaceId) && isValidId(moduleId)
+          && isValidModuleConfig(incoming())
+          && incoming().moduleId == moduleId
+          && isWorkspaceOwner(workspaceId)
+          && incoming().ownerId == workspaceId
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasWorkspaceParent(workspaceId);
+        allow update: if isVerified() && isValidId(workspaceId) && isValidId(moduleId)
+          && isValidModuleConfig(incoming())
+          && incoming().moduleId == existing().moduleId
+          && isWorkspaceOwner(workspaceId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'hiddenColumns', 'columnLabels',
+              'selectOptions', 'customFields', 'updatedAt'
+            ])
+            || isAdmin()
+          );
+        allow delete: if isValidId(workspaceId) && isValidId(moduleId) && isWorkspaceOwner(workspaceId);
+      }
+
+      match /letters/{letterId} {
+        allow get: if isValidId(workspaceId) && isValidId(letterId) && isWorkspaceOwner(workspaceId);
+        allow list: if isVerified() && (workspaceId == request.auth.uid || existing().ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isVerified() && isValidId(workspaceId) && isValidId(letterId)
+          && isValidLetter(incoming())
+          && isWorkspaceOwner(workspaceId)
+          && incoming().ownerId == workspaceId
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasWorkspaceParent(workspaceId);
+        allow update: if isVerified() && isValidId(workspaceId) && isValidId(letterId)
+          && isValidLetter(incoming())
+          && isWorkspaceOwner(workspaceId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            (
+              existing().status != 'Diarsipkan'
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'nomorSurat', 'jenis', 'kategori', 'tanggalSurat', 'tanggalAgenda',
+                'pihakTerkait', 'perihal', 'sifat', 'status', 'isiRingkas',
+                'penandatangan', 'disposisi', 'customValues', 'updatedAt'
+              ])
+            )
+            || (
+              existing().status == 'Diarsipkan'
+              && incoming().status != 'Diarsipkan'
+              && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            )
+            || isAdmin()
+          );
+        allow delete: if isValidId(workspaceId) && isValidId(letterId) && isWorkspaceOwner(workspaceId);
+      }
+
+      match /assets/{assetId} {
+        allow get: if isValidId(workspaceId) && isValidId(assetId) && isWorkspaceOwner(workspaceId);
+        allow list: if isVerified() && (workspaceId == request.auth.uid || existing().ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isVerified() && isValidId(workspaceId) && isValidId(assetId)
+          && isValidAsset(incoming())
+          && isWorkspaceOwner(workspaceId)
+          && incoming().ownerId == workspaceId
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasWorkspaceParent(workspaceId);
+        allow update: if isVerified() && isValidId(workspaceId) && isValidId(assetId)
+          && isValidAsset(incoming())
+          && isWorkspaceOwner(workspaceId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'kodeAset', 'namaAset', 'kategori', 'lokasi', 'jumlah', 'satuan',
+              'kondisi', 'tahunPerolehan', 'sumberDana', 'nilaiPerolehan',
+              'penanggungJawab', 'keterangan', 'customValues', 'updatedAt'
+            ])
+            || isAdmin()
+          );
+        allow delete: if isValidId(workspaceId) && isValidId(assetId) && isWorkspaceOwner(workspaceId);
+      }
+
+      match /teachers/{teacherId} {
+        allow get: if isValidId(workspaceId) && isValidId(teacherId) && isWorkspaceOwner(workspaceId);
+        allow list: if isVerified() && (workspaceId == request.auth.uid || existing().ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isVerified() && isValidId(workspaceId) && isValidId(teacherId)
+          && isValidTeacher(incoming())
+          && isWorkspaceOwner(workspaceId)
+          && incoming().ownerId == workspaceId
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasWorkspaceParent(workspaceId);
+        allow update: if isVerified() && isValidId(workspaceId) && isValidId(teacherId)
+          && isValidTeacher(incoming())
+          && isWorkspaceOwner(workspaceId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'nip', 'nuptk', 'nama', 'jenisKelamin', 'mataPelajaran',
+              'statusKepegawaian', 'jabatanTambahan', 'pendidikan', 'telepon',
+              'email', 'alamat', 'status', 'customValues', 'updatedAt'
+            ])
+            || isAdmin()
+          );
+        allow delete: if isValidId(workspaceId) && isValidId(teacherId) && isWorkspaceOwner(workspaceId);
+      }
+
+      match /students/{studentId} {
+        allow get: if isValidId(workspaceId) && isValidId(studentId) && isWorkspaceOwner(workspaceId);
+        allow list: if isVerified() && (workspaceId == request.auth.uid || existing().ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isVerified() && isValidId(workspaceId) && isValidId(studentId)
+          && isValidStudent(incoming())
+          && isWorkspaceOwner(workspaceId)
+          && incoming().ownerId == workspaceId
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasWorkspaceParent(workspaceId);
+        allow update: if isVerified() && isValidId(workspaceId) && isValidId(studentId)
+          && isValidStudent(incoming())
+          && isWorkspaceOwner(workspaceId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'nisn', 'nis', 'nama', 'jenisKelamin', 'kelas', 'angkatan',
+              'ttl', 'namaWali', 'teleponWali', 'alamat', 'status',
+              'customValues', 'updatedAt'
+            ])
+            || isAdmin()
+          );
+        allow delete: if isValidId(workspaceId) && isValidId(studentId) && isWorkspaceOwner(workspaceId);
+      }
+
+      match /employees/{employeeId} {
+        allow get: if isValidId(workspaceId) && isValidId(employeeId) && isWorkspaceOwner(workspaceId);
+        allow list: if isVerified() && (workspaceId == request.auth.uid || existing().ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isVerified() && isValidId(workspaceId) && isValidId(employeeId)
+          && isValidEmployee(incoming())
+          && isWorkspaceOwner(workspaceId)
+          && incoming().ownerId == workspaceId
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && hasWorkspaceParent(workspaceId);
+        allow update: if isVerified() && isValidId(workspaceId) && isValidId(employeeId)
+          && isValidEmployee(incoming())
+          && isWorkspaceOwner(workspaceId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'kodePegawai', 'nama', 'jenisKelamin', 'divisi', 'jabatan',
+              'statusKepegawaian', 'telepon', 'tanggalMasuk', 'alamat',
+              'status', 'customValues', 'updatedAt'
+            ])
+            || isAdmin()
+          );
+        allow delete: if isValidId(workspaceId) && isValidId(employeeId) && isWorkspaceOwner(workspaceId);
+      }
+    }
+  }
+}

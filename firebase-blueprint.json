@@ -1,0 +1,212 @@
+{
+  "entities": {
+    "Workspace": {
+      "title": "Workspace",
+      "description": "Root institutional workspace owned by an authenticated administrator.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "seeded": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "name", "seeded", "createdAt", "updatedAt"]
+    },
+    "WorkspaceConfig": {
+      "title": "WorkspaceConfig",
+      "description": "Customizable letterhead (Kop Surat) and Dashboard layout settings.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "kopSurat": { "type": "object" },
+        "dashboardConfig": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "kopSurat", "dashboardConfig", "createdAt", "updatedAt"]
+    },
+    "ModuleConfig": {
+      "title": "ModuleConfig",
+      "description": "Customizable column labels, visibility, dropdown options, and custom fields for a database module.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "moduleId": { "type": "string", "enum": ["persuratan", "aset", "guru", "siswa", "karyawan"] },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "hiddenColumns": { "type": "array" },
+        "columnLabels": { "type": "object" },
+        "selectOptions": { "type": "object" },
+        "customFields": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "moduleId", "displayName", "hiddenColumns", "columnLabels", "selectOptions", "customFields", "createdAt", "updatedAt"]
+    },
+    "Letter": {
+      "title": "Letter",
+      "description": "Official correspondence record (Surat Masuk & Surat Keluar) in Tata Usaha.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nomorSurat": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "jenis": { "type": "string", "enum": ["Surat Masuk", "Surat Keluar"] },
+        "kategori": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "tanggalSurat": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "tanggalAgenda": { "type": "string", "maxLength": 20 },
+        "pihakTerkait": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "perihal": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "sifat": { "type": "string", "enum": ["Biasa", "Penting", "Segera", "Rahasia"] },
+        "status": { "type": "string", "enum": ["Draft", "Diproses", "Terkirim", "Diterima", "Diarsipkan"] },
+        "isiRingkas": { "type": "string", "maxLength": 5000 },
+        "penandatangan": { "type": "string", "maxLength": 120 },
+        "disposisi": { "type": "string", "maxLength": 300 },
+        "customValues": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "nomorSurat", "jenis", "kategori", "tanggalSurat", "pihakTerkait", "perihal", "sifat", "status", "createdAt", "updatedAt"]
+    },
+    "Asset": {
+      "title": "Asset",
+      "description": "School facility and equipment asset inventory record.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "kodeAset": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "namaAset": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "kategori": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "lokasi": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "jumlah": { "type": "number" },
+        "satuan": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "kondisi": { "type": "string", "enum": ["Baik", "Rusak Ringan", "Rusak Berat"] },
+        "tahunPerolehan": { "type": "string", "maxLength": 10 },
+        "sumberDana": { "type": "string", "maxLength": 80 },
+        "nilaiPerolehan": { "type": "number" },
+        "penanggungJawab": { "type": "string", "maxLength": 120 },
+        "keterangan": { "type": "string", "maxLength": 500 },
+        "customValues": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "kodeAset", "namaAset", "kategori", "lokasi", "jumlah", "satuan", "kondisi", "nilaiPerolehan", "createdAt", "updatedAt"]
+    },
+    "Teacher": {
+      "title": "Teacher",
+      "description": "Teacher (Guru) directory and employment record.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nip": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "nuptk": { "type": "string", "maxLength": 40 },
+        "nama": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "jenisKelamin": { "type": "string", "enum": ["L", "P"] },
+        "mataPelajaran": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "statusKepegawaian": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "jabatanTambahan": { "type": "string", "maxLength": 100 },
+        "pendidikan": { "type": "string", "maxLength": 60 },
+        "telepon": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 120 },
+        "alamat": { "type": "string", "maxLength": 300 },
+        "status": { "type": "string", "enum": ["Aktif", "Cuti", "Mutasi", "Pensiun"] },
+        "customValues": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "nip", "nama", "jenisKelamin", "mataPelajaran", "statusKepegawaian", "status", "createdAt", "updatedAt"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Student (Siswa) registry record.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nisn": { "type": "string", "minLength": 1, "maxLength": 30 },
+        "nis": { "type": "string", "maxLength": 30 },
+        "nama": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "jenisKelamin": { "type": "string", "enum": ["L", "P"] },
+        "kelas": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "angkatan": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "ttl": { "type": "string", "maxLength": 100 },
+        "namaWali": { "type": "string", "maxLength": 140 },
+        "teleponWali": { "type": "string", "maxLength": 30 },
+        "alamat": { "type": "string", "maxLength": 300 },
+        "status": { "type": "string", "enum": ["Aktif", "Lulus", "Pindah", "Non-Aktif"] },
+        "customValues": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "nisn", "nama", "jenisKelamin", "kelas", "angkatan", "status", "createdAt", "updatedAt"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "Non-teaching staff and administrative employee (Karyawan) record.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "kodePegawai": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "nama": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "jenisKelamin": { "type": "string", "enum": ["L", "P"] },
+        "divisi": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "jabatan": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "statusKepegawaian": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "telepon": { "type": "string", "maxLength": 30 },
+        "tanggalMasuk": { "type": "string", "maxLength": 20 },
+        "alamat": { "type": "string", "maxLength": 300 },
+        "status": { "type": "string", "enum": ["Aktif", "Cuti", "Resign"] },
+        "customValues": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "kodePegawai", "nama", "jenisKelamin", "divisi", "jabatan", "statusKepegawaian", "status", "createdAt", "updatedAt"]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Explicit admin membership record.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/workspaces/{workspaceId}": {
+      "schema": { "$ref": "#/entities/Workspace" },
+      "description": "Institutional workspace root document owned by the signed-in user."
+    },
+    "/workspaces/{workspaceId}/config/{configId}": {
+      "schema": { "$ref": "#/entities/WorkspaceConfig" },
+      "description": "Kop Surat (letterhead) and customizable Dashboard layout configuration."
+    },
+    "/workspaces/{workspaceId}/moduleConfigs/{moduleId}": {
+      "schema": { "$ref": "#/entities/ModuleConfig" },
+      "description": "Customizable table columns, labels, dropdown options, and custom fields per module."
+    },
+    "/workspaces/{workspaceId}/letters/{letterId}": {
+      "schema": { "$ref": "#/entities/Letter" },
+      "description": "Tata Usaha correspondence records (Surat Masuk & Surat Keluar)."
+    },
+    "/workspaces/{workspaceId}/assets/{assetId}": {
+      "schema": { "$ref": "#/entities/Asset" },
+      "description": "School facility and equipment asset inventory records."
+    },
+    "/workspaces/{workspaceId}/teachers/{teacherId}": {
+      "schema": { "$ref": "#/entities/Teacher" },
+      "description": "Teacher (Guru) directory records."
+    },
+    "/workspaces/{workspaceId}/students/{studentId}": {
+      "schema": { "$ref": "#/entities/Student" },
+      "description": "Student (Siswa) registry records."
+    },
+    "/workspaces/{workspaceId}/employees/{employeeId}": {
+      "schema": { "$ref": "#/entities/Employee" },
+      "description": "Administrative and support employee (Karyawan) records."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Verified system administrators."
+    }
+  }
+}
